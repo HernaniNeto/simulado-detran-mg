@@ -18,7 +18,7 @@
   CLASSICAS.forEach(function (c) { c.ids.forEach(function (id) { ehClassica[id] = true; }); });
 
   var estado = { tela: 'inicio', sessao: null, resultado: null, filtro: 'erradas', aba: 'R', busca: '', confirmar: false };
-  var relogio = null, avisados = {};
+  var relogio = null, avisados = {}, pedidoInstalar = null;
 
   function aplicarAcessibilidade() {
     var raiz = document.documentElement;
@@ -266,7 +266,8 @@
       '<div class="faixa-acoes"><span>Letras</span>' +
       '<button data-letras="1" aria-label="Aumentar letras"' + (letras >= 2 ? ' disabled' : '') + '>A+</button>' +
       '<button data-letras="-1" aria-label="Diminuir letras"' + (letras <= 0 ? ' disabled' : '') + '>A−</button>' +
-      '<button data-acao="contraste" aria-pressed="' + contraste + '">Contraste</button></div></div></div>';
+      '<button data-acao="contraste" aria-pressed="' + contraste + '">Contraste</button>' +
+      (pedidoInstalar ? '<button class="instalar" data-acao="instalar">Instalar app</button>' : '') + '</div></div></div>';
   }
 
   function cabecalho(ativo) {
@@ -577,6 +578,9 @@
         irPara('inicio');
         document.getElementById(d.acao).scrollIntoView();
         break;
+      case 'instalar':
+        if (pedidoInstalar) pedidoInstalar.prompt();
+        break;
       case 'comecar': comecarProva(); break;
       case 'continuar':
         estado.sessao = ler(CHAVE.prova, null);
@@ -627,6 +631,21 @@
   });
 
   window.addEventListener('beforeunload', salvarProva);
+
+  /* Aplicativo instalável */
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    pedidoInstalar = e;
+    desenhar();
+  });
+  window.addEventListener('appinstalled', function () {
+    pedidoInstalar = null;
+    desenhar();
+  });
+  // Aberto com dois cliques (file://) não há service worker, e o simulado segue normal.
+  if ('serviceWorker' in navigator && /^http/.test(location.protocol)) {
+    navigator.serviceWorker.register('sw.js').catch(function () { /* segue sem modo offline */ });
+  }
 
   aplicarAcessibilidade();
 

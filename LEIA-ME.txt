@@ -1,6 +1,12 @@
 SIMULADO DETRAN-MG
 
-Como usar: abra o arquivo index.html com dois cliques. Não precisa de internet.
+No celular: abra https://simulado-detran-mg.vercel.app
+  Android (Chrome): toque em "Instalar app", no topo da página, ou no menu do
+  Chrome, em "Instalar app" ou "Adicionar à tela inicial".
+  iPhone (Safari): toque em Compartilhar e em "Adicionar à Tela de Início".
+Depois da primeira visita com internet, o app funciona sem internet.
+
+No computador: abra o arquivo index.html com dois cliques. Não precisa de internet.
 
 A pasta precisa ficar completa. O simulado usa index.html, app.js, estilo.css
 e as pastas dados, placas e fontes.

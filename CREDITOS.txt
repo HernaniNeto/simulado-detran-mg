@@ -24,6 +24,7 @@ Figuras das placas
   seguindo as figuras do Manual.
 
 Desenhados para este simulado, sem valor oficial
+  Ícones do aplicativo (pasta icones).
   Pictograma de biblioteca (THC-11), que não aparece no Manual consultado.
   Marcas na via (LFO, LMS, LBO, LPP, MCA, FTP, LRE): esquemas ilustrativos
   baseados no Manual, Volume IV.
