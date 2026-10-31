@@ -1,0 +1,8 @@
+{
+  "name": "simulado-detran-mg",
+  "private": true,
+  "description": "Rota de sincronização do simulado. O site em si não tem etapa de build.",
+  "dependencies": {
+    "@neondatabase/serverless": "^1.2.0"
+  }
+}

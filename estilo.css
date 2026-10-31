@@ -274,6 +274,13 @@ html[data-contraste="1"] .btn-marcar[aria-pressed="true"] { color: #ff7b7b; }
 .atividade b { display: block; font-weight: 700; }
 .atividade div > span { display: block; margin-top: 2px; font-size: .8125rem; color: var(--suave); }
 .atividade-nota { text-align: right; font-variant-numeric: tabular-nums; }
+.sinc-texto { margin-top: 8px; font-size: .9375rem; max-width: 44em; }
+.sinc-codigo { margin-top: 14px; font-size: 1.375rem; font-weight: 800; letter-spacing: .03em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.sinc-situacao { margin-top: 6px; font-size: .875rem; color: var(--suave); }
+.sinc-acoes { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.sinc-rotulo { display: block; margin-top: 20px; font-weight: 600; font-size: .9375rem; }
+.sinc-conectar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 8px; }
+.sinc-conectar .busca { flex: 1 1 220px; width: auto; margin-top: 0; text-transform: uppercase; }
 .nota-desempenho { margin: 16px 0 28px; font-size: .8125rem; color: var(--suave); }
 @media (max-width: 480px) {
   .numeros-dia { grid-template-columns: repeat(2, 1fr); }

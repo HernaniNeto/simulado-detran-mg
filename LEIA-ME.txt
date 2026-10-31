@@ -11,5 +11,7 @@ No computador: abra o arquivo index.html com dois cliques. Não precisa de inter
 A pasta precisa ficar completa. O simulado usa index.html, app.js, estilo.css
 e as pastas dados, placas e fontes.
 
-Seu progresso fica salvo apenas neste navegador.
+Seu progresso fica salvo neste navegador. Para ver provas e treinos em vários
+aparelhos pelo site, crie um código em "Meu desempenho" e digite nos outros.
+Aberto com dois cliques, sem o site, o simulado não sincroniza.
 Origem das questões e das figuras: veja CREDITOS.txt.

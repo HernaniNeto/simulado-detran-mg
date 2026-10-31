@@ -12,7 +12,7 @@
   var MAX_REGISTROS = 1000;
   // Pausa maior que esta entre duas ações não conta como tempo de treino.
   var PAUSA_MAX = 5 * 60000;
-  var CHAVE = { prova: 'detran.prova', hist: 'detran.historico', treinos: 'detran.treinos', erradas: 'detran.erradas', vistas: 'detran.vistas', letras: 'detran.letras', contraste: 'detran.contraste' };
+  var CHAVE = { prova: 'detran.prova', hist: 'detran.historico', treinos: 'detran.treinos', sinc: 'detran.sincronizacao', erradas: 'detran.erradas', vistas: 'detran.vistas', letras: 'detran.letras', contraste: 'detran.contraste' };
 
   var app = document.getElementById('app');
   var BANCO = window.BANCO, GUIA = window.GUIA, MODULOS = window.MODULOS, CLASSICAS = window.CLASSICAS;
@@ -177,10 +177,123 @@
       acertos: respondidas.filter(function (it) { return it.resp === it.certa; }).length,
       gasto: s.tempo
     };
-    var treinos = ler(CHAVE.treinos, []);
-    if (treinos[0] && treinos[0].quando === s.inicio) treinos[0] = registro;
-    else treinos.unshift(registro);
+    // A sincronização pode ter trazido treinos mais novos de outro aparelho para o topo.
+    var treinos = ler(CHAVE.treinos, []).filter(function (t) { return t.quando !== s.inicio; });
+    treinos.unshift(registro);
     gravar(CHAVE.treinos, treinos.slice(0, MAX_REGISTROS));
+  }
+
+  /* Sincronização entre aparelhos */
+  var sinc = { ocupado: false, pendente: false, erro: '' };
+  var podeSincronizar = /^http/.test(location.protocol);
+
+  function formatarCodigo(codigo) { return codigo.replace(/(.{4})(?=.)/g, '$1-'); }
+  function registrosLocais() {
+    var provas = ler(CHAVE.hist, []).map(function (h) {
+      return { tipo: 'prova', quando: h.quando, titulo: null, total: TOTAL, acertos: h.acertos, gasto: h.gasto };
+    });
+    var treinos = ler(CHAVE.treinos, []).map(function (t) {
+      return { tipo: 'treino', quando: t.quando, titulo: t.titulo, total: t.respondidas, acertos: t.acertos, gasto: t.gasto };
+    });
+    return provas.concat(treinos).sort(function (a, b) { return b.quando - a.quando; });
+  }
+  function pedirServidor(corpo, aoFechar) {
+    return fetch('api/sincronizar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corpo),
+      keepalive: !!aoFechar
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (dados) {
+        if (r.ok) return dados;
+        var erro = new Error(dados.erro || 'servidor');
+        erro.status = r.status;
+        throw erro;
+      });
+    });
+  }
+  // Junta o que há neste aparelho com o que veio do servidor. Devolve true se algo mudou.
+  function mesclarRegistros(recebidos, apagadoAte) {
+    var mapa = {};
+    registrosLocais().concat(recebidos).forEach(function (r) {
+      var chave = r.tipo + ':' + r.quando, atual = mapa[chave];
+      if (!atual || r.total > atual.total || (r.total === atual.total && r.gasto > atual.gasto)) mapa[chave] = r;
+    });
+    var todos = Object.keys(mapa).map(function (c) { return mapa[c]; })
+      .filter(function (r) { return r.quando > apagadoAte; })
+      .sort(function (a, b) { return b.quando - a.quando; });
+    var provas = todos.filter(function (r) { return r.tipo === 'prova'; }).map(function (r) {
+      return { quando: r.quando, acertos: r.acertos, gasto: r.gasto };
+    });
+    var treinos = todos.filter(function (r) { return r.tipo === 'treino'; }).map(function (r) {
+      return { quando: r.quando, titulo: r.titulo, respondidas: r.total, acertos: r.acertos, gasto: r.gasto };
+    });
+    var mudou = JSON.stringify(registrosLocais()) !== JSON.stringify(todos);
+    gravar(CHAVE.hist, provas.slice(0, MAX_REGISTROS));
+    gravar(CHAVE.treinos, treinos.slice(0, MAX_REGISTROS));
+    return mudou;
+  }
+  function sincronizar(aoFechar) {
+    var config = ler(CHAVE.sinc, null);
+    if (!config || !podeSincronizar) return;
+    if (sinc.ocupado) { sinc.pendente = true; return; }
+    sinc.ocupado = true;
+    var mudou = false;
+    // O navegador limita o envio ao fechar a página, então vão só os registros recentes.
+    var registros = aoFechar ? registrosLocais().slice(0, 20) : registrosLocais();
+    pedirServidor({ acao: 'sincronizar', codigo: config.codigo, registros: registros }, aoFechar).then(function (d) {
+      mudou = mesclarRegistros(d.registros, d.apagadoAte);
+      config.ultima = Date.now();
+      gravar(CHAVE.sinc, config);
+      sinc.erro = '';
+    }).catch(function (e) {
+      sinc.erro = e.status === 404 ? 'codigo' : 'conexao';
+    }).then(function () {
+      sinc.ocupado = false;
+      if (sinc.pendente) { sinc.pendente = false; sincronizar(); }
+      if (estado.tela === 'desempenho' || (mudou && estado.tela === 'inicio')) desenhar();
+    });
+  }
+  function ativarSincronizacao(codigo) {
+    gravar(CHAVE.sinc, { codigo: codigo });
+    sinc.erro = '';
+    estado.codigoSinc = '';
+    desenhar();
+    sincronizar();
+  }
+  function criarCodigo() {
+    pedirServidor({ acao: 'criar' }).then(function (d) {
+      ativarSincronizacao(d.codigo);
+      avisar('Código criado. Digite ele nos seus outros aparelhos.');
+    }).catch(function () {
+      avisar('Não foi possível criar o código agora. Confira a internet e tente de novo.');
+    });
+  }
+  function conectarCodigo() {
+    var codigo = (estado.codigoSinc || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!codigo) { avisar('Digite o código de sincronização.'); return; }
+    pedirServidor({ acao: 'sincronizar', codigo: codigo, registros: [] }).then(function () {
+      ativarSincronizacao(codigo);
+      avisar('Aparelho conectado.');
+    }).catch(function (e) {
+      avisar(e.status === 404 ? 'Código não encontrado. Confira e tente de novo.' : 'Não foi possível conectar agora. Confira a internet e tente de novo.');
+    });
+  }
+  function apagarDadosLocais() {
+    apagar(CHAVE.hist); apagar(CHAVE.treinos); apagar(CHAVE.erradas); apagar(CHAVE.vistas);
+    desenhar();
+    avisar('Histórico e questões erradas apagados.');
+  }
+  function limparHistorico() {
+    var config = ler(CHAVE.sinc, null);
+    if (!config) {
+      if (window.confirm('Apagar seu histórico de provas e treinos e a lista de questões erradas?')) apagarDadosLocais();
+      return;
+    }
+    if (!window.confirm('Apagar seu histórico de provas e treinos em todos os aparelhos conectados e a lista de questões erradas deste aparelho?')) return;
+    pedirServidor({ acao: 'apagar', codigo: config.codigo }).then(apagarDadosLocais).catch(function () {
+      avisar('Nada foi apagado: é preciso internet para apagar nos aparelhos conectados.');
+    });
   }
 
   function irPara(tela) {
@@ -248,6 +361,7 @@
     estado.sessao = null;
     estado.filtro = acertos === TOTAL ? 'todas' : 'erradas';
     irPara('resultado');
+    sincronizar();
   }
   function registrarErradas(itens) {
     var erradas = ler(CHAVE.erradas, []);
@@ -484,6 +598,30 @@
     return '<li class="atividade"><time>' + hora + '</time><div><b>' + (a.prova ? 'Prova' : 'Treino: ' + esc(a.titulo)) + '</b><span>' + detalhe + '</span></div>' +
       '<div class="atividade-nota"><b>' + a.acertos + '/' + a.total + '</b><span>' + porcentagem(a.acertos, a.total) + '</span></div></li>';
   }
+  function painelSincronizacao() {
+    if (!podeSincronizar) return '';
+    var config = ler(CHAVE.sinc, null);
+    if (!config) {
+      return '<section class="painel-branco"><h2>Sincronizar aparelhos</h2>' +
+        '<p class="sinc-texto">Veja o mesmo histórico no celular e no computador, sem login. Crie um código em um aparelho e digite nos outros. Só são enviadas a data, a hora, a nota, o tempo e o nome do treino.</p>' +
+        '<div class="sinc-acoes"><button class="botao principal" data-acao="criar-codigo">Criar código</button></div>' +
+        '<label class="sinc-rotulo" for="codigo-sinc">Já tem um código?</label>' +
+        '<div class="sinc-conectar"><input class="busca" id="codigo-sinc" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD-EFGH-JKLM-NPQR" value="' + esc(estado.codigoSinc || '') + '">' +
+        '<button class="botao" data-acao="conectar-codigo">Conectar</button></div></section>';
+    }
+    var situacao = sinc.ocupado ? 'Sincronizando…'
+      : sinc.erro === 'codigo' ? 'Este código não existe mais. Desligue e conecte de novo.'
+      : sinc.erro ? 'Sem conexão agora. Seus registros seguem salvos aqui e serão enviados depois.'
+      : config.ultima ? 'Última sincronização: ' + dataCurta(config.ultima) + ' às ' + new Date(config.ultima).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + '.'
+      : 'Aguardando a primeira sincronização.';
+    return '<section class="painel-branco"><h2>Sincronização ligada</h2>' +
+      '<p class="sinc-texto">Digite este código nos seus outros aparelhos. Guarde com cuidado: quem tiver o código pode ver e apagar este histórico.</p>' +
+      '<p class="sinc-codigo">' + esc(formatarCodigo(config.codigo)) + '</p>' +
+      '<p class="sinc-situacao" role="status">' + esc(situacao) + '</p>' +
+      '<div class="sinc-acoes"><button class="botao principal" data-acao="sincronizar-agora">Sincronizar agora</button>' +
+      '<button class="botao" data-acao="copiar-codigo">Copiar código</button>' +
+      '<button class="botao" data-acao="desligar-sinc">Desligar neste aparelho</button></div></section>';
+  }
   function telaDesempenho() {
     var dias = [];
     atividades().forEach(function (a) {
@@ -512,8 +650,8 @@
     if (!lista) lista = '<section class="painel-branco"><p class="vazio">Faça uma prova ou um treino e o registro aparece aqui, com a data, a hora e o tempo.</p></section>';
 
     return cabecalho('desempenho') + '<main class="miolo"><section class="topo-guia"><h1>Meu desempenho</h1></section>' +
-      '<section class="painel-branco"><h2>Hoje</h2><div class="numeros-dia">' + numeros + '</div></section>' + lista +
-      '<p class="nota-desempenho">Os registros ficam salvos neste aparelho e não passam para outros. A prova entra na lista quando é entregue. No treino, pausas de mais de 5 minutos não contam como tempo.</p></main>' + rodape();
+      '<section class="painel-branco"><h2>Hoje</h2><div class="numeros-dia">' + numeros + '</div></section>' + lista + painelSincronizacao() +
+      '<p class="nota-desempenho">' + (ler(CHAVE.sinc, null) ? 'Os registros ficam neste aparelho e são trocados com os outros aparelhos conectados.' : 'Os registros ficam salvos neste aparelho.') + ' A prova entra na lista quando é entregue. No treino, pausas de mais de 5 minutos não contam como tempo.</p></main>' + rodape();
   }
 
   function telaResultado() {
@@ -709,18 +847,32 @@
       case 'pedir-entrega': estado.confirmar = true; desenhar(); break;
       case 'voltar-prova': estado.confirmar = false; desenhar(); break;
       case 'entregar': entregar(false); break;
-      case 'sair-treino': registrarTreino(); estado.sessao = null; irPara('inicio'); break;
-      case 'limpar':
-        if (window.confirm('Apagar seu histórico de provas e treinos e a lista de questões erradas?')) {
-          apagar(CHAVE.hist); apagar(CHAVE.treinos); apagar(CHAVE.erradas); apagar(CHAVE.vistas);
+      case 'sair-treino': registrarTreino(); estado.sessao = null; irPara('inicio'); sincronizar(); break;
+      case 'criar-codigo': criarCodigo(); break;
+      case 'conectar-codigo': conectarCodigo(); break;
+      case 'sincronizar-agora': sincronizar(); desenhar(); break;
+      case 'copiar-codigo':
+        navigator.clipboard.writeText(formatarCodigo(ler(CHAVE.sinc, {}).codigo)).then(function () {
+          avisar('Código copiado.');
+        }).catch(function () {
+          avisar('Não foi possível copiar. Anote o código na tela.');
+        });
+        break;
+      case 'desligar-sinc':
+        if (window.confirm('Desligar a sincronização neste aparelho? O histórico continua salvo aqui. Anote o código se quiser conectar de novo.')) {
+          apagar(CHAVE.sinc);
+          sinc.erro = '';
           desenhar();
-          avisar('Histórico e questões erradas apagados.');
         }
+        break;
+      case 'limpar':
+        limparHistorico();
         break;
     }
   });
 
   app.addEventListener('input', function (e) {
+    if (e.target.id === 'codigo-sinc') estado.codigoSinc = e.target.value;
     if (e.target.id === 'busca') {
       estado.busca = e.target.value;
       document.getElementById('conteudo-guia').innerHTML = conteudoGuia();
@@ -741,6 +893,11 @@
   });
 
   window.addEventListener('beforeunload', salvarProva);
+
+  document.addEventListener('visibilitychange', function () {
+    sincronizar(document.visibilityState === 'hidden');
+  });
+  window.addEventListener('online', function () { sincronizar(); });
 
   /* Aplicativo instalável */
   window.addEventListener('beforeinstallprompt', function (e) {
@@ -766,5 +923,6 @@
     entregar(true);
   } else {
     desenhar();
+    sincronizar();
   }
 })();
