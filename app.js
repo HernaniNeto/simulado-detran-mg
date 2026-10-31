@@ -409,11 +409,15 @@
       '</div></main>' + janela;
   }
 
+  function porcentagem(acertos) {
+    return (acertos / TOTAL * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
+  }
+
   function telaResultado() {
     var r = estado.resultado;
     var frase = r.aprovado
-      ? 'Você passou do mínimo de ' + MINIMO + ' acertos.'
-      : (MINIMO - r.acertos === 1 ? 'Faltou 1 acerto' : 'Faltaram ' + (MINIMO - r.acertos) + ' acertos') + ' para chegar aos ' + MINIMO + '.';
+      ? 'Você passou do mínimo de ' + MINIMO + ' acertos (' + porcentagem(MINIMO) + ').'
+      : (MINIMO - r.acertos === 1 ? 'Faltou 1 acerto' : 'Faltaram ' + (MINIMO - r.acertos) + ' acertos') + ' para chegar aos ' + MINIMO + ' (' + porcentagem(MINIMO) + ').';
     if (r.porTempo) frase = 'O tempo acabou e a prova foi entregue automaticamente. ' + frase;
 
     var temas = Object.keys(MODULOS).map(function (m) {
@@ -448,7 +452,8 @@
       '<img class="selo" src="simbolos/brasao.png" alt="Brasão de Minas Gerais"><div>' +
       '<h1>' + (r.aprovado ? 'Aprovado' : 'Reprovado') + '</h1><p>' + esc(frase) + ' Tempo usado: ' + mmss(r.gasto) + '.' +
       (r.brancos ? ' ' + plural(r.brancos, 'questão ficou', 'questões ficaram') + ' em branco.' : '') + '</p></div>' +
-      '<div class="placar" aria-label="' + r.acertos + ' acertos em ' + TOTAL + '">' + r.acertos + '<small>/' + TOTAL + '</small></div></section>' +
+      '<div class="placar" aria-label="' + r.acertos + ' acertos em ' + TOTAL + ', ' + porcentagem(r.acertos) + '">' + r.acertos + '<small>/' + TOTAL + '</small>' +
+      '<span class="placar-porcentagem">' + porcentagem(r.acertos) + ' de acertos</span></div></section>' +
       '<div class="acoes-resultado"><button class="botao principal" data-acao="comecar">Fazer nova prova</button><button class="botao" data-acao="inicio">Voltar ao início</button></div>' +
       '<section class="painel-branco"><h2>Acertos por assunto</h2>' + temas + '</section>' +
       '<section class="painel-branco"><h2>Revisão das questões</h2><div class="filtros">' + filtros + '</div>' + itens + '</section></main>' + rodape();
