@@ -445,11 +445,11 @@
     }
 
     var tabela = hist.length
-      ? '<table class="historico"><thead><tr><th>Data</th><th>Resultado</th><th class="num">Acertos</th><th class="num">Tempo</th></tr></thead><tbody>' +
+      ? '<table class="historico"><thead><tr><th>Data</th><th>Resultado</th><th class="num">Acertos</th><th class="num">Erros</th><th class="num">Tempo</th></tr></thead><tbody>' +
         hist.slice(0, 6).map(function (h) {
           var ok = h.acertos >= MINIMO;
           return '<tr><td>' + new Date(h.quando).toLocaleDateString('pt-BR') + '</td><td class="' + (ok ? 'passou' : 'nao-passou') + '">' + (ok ? 'Aprovado' : 'Reprovado') +
-            '</td><td class="num">' + h.acertos + '/' + TOTAL + '</td><td class="num">' + mmss(h.gasto) + '</td></tr>';
+            '</td><td class="num">' + h.acertos + '</td><td class="num">' + (TOTAL - h.acertos) + '</td><td class="num">' + mmss(h.gasto) + '</td></tr>';
         }).join('') + '</tbody></table>'
       : '<p class="sem-provas">As provas que você entregar aparecem aqui, com a nota e o tempo gasto.</p>';
 
@@ -586,6 +586,8 @@
       treinos: treinos.length,
       aprovadas: provas.filter(function (a) { return a.acertos >= MINIMO; }).length,
       acertosProvas: somar(provas, 'acertos'),
+      acertos: somar(lista, 'acertos'),
+      erros: somar(lista, 'total') - somar(lista, 'acertos'),
       tempoProvas: somar(provas, 'gasto'),
       tempoTreinos: somar(treinos, 'gasto')
     };
@@ -596,7 +598,7 @@
       ? '<span class="' + (a.acertos >= MINIMO ? 'passou' : 'nao-passou') + '">' + (a.acertos >= MINIMO ? 'Aprovado' : 'Reprovado') + '</span> · ' + duracao(a.gasto)
       : plural(a.total, 'questão respondida', 'questões respondidas') + ' · ' + duracao(a.gasto);
     return '<li class="atividade"><time>' + hora + '</time><div><b>' + (a.prova ? 'Prova' : 'Treino: ' + esc(a.titulo)) + '</b><span>' + detalhe + '</span></div>' +
-      '<div class="atividade-nota"><b>' + a.acertos + '/' + a.total + '</b><span>' + porcentagem(a.acertos, a.total) + '</span></div></li>';
+      '<div class="atividade-nota"><b>' + plural(a.acertos, 'acerto', 'acertos') + '</b><span>' + plural(a.total - a.acertos, 'erro', 'erros') + ' · ' + porcentagem(a.acertos, a.total) + '</span></div></li>';
   }
   function painelSincronizacao() {
     if (!podeSincronizar) return '';
@@ -633,6 +635,8 @@
     var numeros = [
       [hoje.provas, hoje.provas === 1 ? 'prova entregue' : 'provas entregues'],
       [hoje.treinos, hoje.treinos === 1 ? 'treino' : 'treinos'],
+      [hoje.acertos, hoje.acertos === 1 ? 'acerto' : 'acertos'],
+      [hoje.erros, hoje.erros === 1 ? 'erro' : 'erros'],
       [duracao(hoje.tempoProvas), 'em provas'],
       [duracao(hoje.tempoTreinos), 'treinando']
     ].map(function (n) {
@@ -643,6 +647,7 @@
       var r = resumirDia(dia), partes = [];
       if (r.provas) partes.push(plural(r.provas, 'prova', 'provas') + ', ' + r.aprovadas + ' ' + (r.aprovadas === 1 ? 'aprovada' : 'aprovadas') + ', média de ' + porcentagem(r.acertosProvas, r.provas * TOTAL));
       if (r.treinos) partes.push(plural(r.treinos, 'treino', 'treinos'));
+      partes.push(plural(r.acertos, 'acerto', 'acertos') + ' e ' + plural(r.erros, 'erro', 'erros'));
       partes.push(duracao(r.tempoProvas + r.tempoTreinos) + ' no total');
       return '<section class="painel-branco dia"><h2>' + esc(nomeDoDia(dia[0].quando)) + '</h2><p class="dia-resumo">' + esc(partes.join(' · ')) + '</p>' +
         '<ul class="atividades">' + dia.map(linhaAtividade).join('') + '</ul></section>';
@@ -653,7 +658,7 @@
       '<section class="painel-branco"><h2>Hoje</h2><div class="numeros-dia">' + numeros + '</div></section>' +
       // Com a sincronização desligada, o convite vem antes da lista para ser encontrado.
       (ler(CHAVE.sinc, null) ? lista + painelSincronizacao() : painelSincronizacao() + lista) +
-      '<p class="nota-desempenho">' + (ler(CHAVE.sinc, null) ? 'Os registros ficam neste aparelho e são trocados com os outros aparelhos conectados.' : 'Os registros ficam salvos neste aparelho.') + ' A prova entra na lista quando é entregue. No treino, pausas de mais de 5 minutos não contam como tempo.</p></main>' + rodape();
+      '<p class="nota-desempenho">' + (ler(CHAVE.sinc, null) ? 'Os registros ficam neste aparelho e são trocados com os outros aparelhos conectados.' : 'Os registros ficam salvos neste aparelho.') + ' A prova entra na lista quando é entregue, e questão em branco conta como erro. No treino, pausas de mais de 5 minutos não contam como tempo.</p></main>' + rodape();
   }
 
   function telaResultado() {
