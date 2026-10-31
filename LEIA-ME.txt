@@ -1,0 +1,9 @@
+SIMULADO DETRAN-MG
+
+Como usar: abra o arquivo index.html com dois cliques. Não precisa de internet.
+
+A pasta precisa ficar completa. O simulado usa index.html, app.js, estilo.css
+e as pastas dados, placas e fontes.
+
+Seu progresso fica salvo apenas neste navegador.
+Origem das questões e das figuras: veja CREDITOS.txt.

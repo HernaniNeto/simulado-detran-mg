@@ -1,0 +1,29 @@
+ORIGEM DOS DADOS
+
+Questões
+  Banco Nacional de Questões, versão 1.0. Secretaria Nacional de Trânsito
+  (Senatran), Ministério dos Transportes, programa CNH do Brasil, 2025.
+  Base legal: Resolução Contran nº 1.020/2025, arts. 33 e 34.
+  1.500 questões com gabarito e comentário oficiais. Foram corrigidos apenas
+  erros de digitação evidentes.
+
+Figuras das placas
+  Advertência (A-*): Manual Brasileiro de Sinalização de Trânsito, Volume II.
+  Pictogramas de indicação (SAU, TAR, THC, TNA, DEF): Manual, Volume III,
+  aplicados sobre placa azul, marrom ou verde.
+  Regulamentação (R-*): arquivos "Brasil R-*.svg" do Wikimedia Commons
+  (domínio público ou CC BY-SA 3.0, autoria indicada em cada página), conferidos
+  com o índice do Manual, Volume I. R-21, R-22, R-35b e R-40 vêm do índice do Manual, ampliadas.
+  R-19 e R-46 foram compostas a partir das outras placas,
+  seguindo as figuras do Manual.
+
+Desenhados para este simulado, sem valor oficial
+  Pictograma de biblioteca (THC-11), que não aparece no Manual consultado.
+  Marcas na via (LFO, LMS, LBO, LPP, MCA, FTP, LRE): esquemas ilustrativos
+  baseados no Manual, Volume IV.
+
+Bandeira e brasão de Minas Gerais: Wikimedia Commons, domínio público.
+O logotipo do Detran-MG não é usado. As cores e a fonte (Montserrat, SIL Open
+Font License) seguem o portal do órgão.
+
+Este simulado é independente e não é um serviço do Detran-MG nem da Senatran.
