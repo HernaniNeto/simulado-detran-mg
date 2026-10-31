@@ -650,7 +650,9 @@
     if (!lista) lista = '<section class="painel-branco"><p class="vazio">Faça uma prova ou um treino e o registro aparece aqui, com a data, a hora e o tempo.</p></section>';
 
     return cabecalho('desempenho') + '<main class="miolo"><section class="topo-guia"><h1>Meu desempenho</h1></section>' +
-      '<section class="painel-branco"><h2>Hoje</h2><div class="numeros-dia">' + numeros + '</div></section>' + lista + painelSincronizacao() +
+      '<section class="painel-branco"><h2>Hoje</h2><div class="numeros-dia">' + numeros + '</div></section>' +
+      // Com a sincronização desligada, o convite vem antes da lista para ser encontrado.
+      (ler(CHAVE.sinc, null) ? lista + painelSincronizacao() : painelSincronizacao() + lista) +
       '<p class="nota-desempenho">' + (ler(CHAVE.sinc, null) ? 'Os registros ficam neste aparelho e são trocados com os outros aparelhos conectados.' : 'Os registros ficam salvos neste aparelho.') + ' A prova entra na lista quando é entregue. No treino, pausas de mais de 5 minutos não contam como tempo.</p></main>' + rodape();
   }
 
