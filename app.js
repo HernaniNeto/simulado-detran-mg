@@ -2,17 +2,20 @@
   'use strict';
 
   var TOTAL = 30, MINIMO = 20, DURACAO = 60 * 60 * 1000;
-  // Sorteio proporcional ao tamanho de cada módulo do banco oficial.
-  // A Senatran não publicou os critérios de distribuição da prova real.
-  var COTAS = { 1: 8, 2: 4, 3: 13, 4: 5 };
+  // Sorteio próximo do tamanho de cada módulo do banco oficial, com reforço em
+  // infrações (módulo 2). A Senatran não publicou os critérios da prova real.
+  var COTAS = { 1: 8, 2: 6, 3: 11, 4: 5 };
   var MIN_PLACAS = 4;
+  // As 12 clássicas incluem 5 de níveis de infração, uma de cada grupo.
+  var COTA_CLASSICAS = 12, MIN_NIVEIS = 5;
   var LETRAS = ['A', 'B', 'C', 'D'];
   var CHAVE = { prova: 'detran.prova', hist: 'detran.historico', erradas: 'detran.erradas', vistas: 'detran.vistas', letras: 'detran.letras', contraste: 'detran.contraste' };
 
   var app = document.getElementById('app');
-  var BANCO = window.BANCO, GUIA = window.GUIA, MODULOS = window.MODULOS;
-  var porId = {};
+  var BANCO = window.BANCO, GUIA = window.GUIA, MODULOS = window.MODULOS, CLASSICAS = window.CLASSICAS;
+  var porId = {}, ehClassica = {};
   BANCO.forEach(function (q) { porId[q.i] = q; });
+  CLASSICAS.forEach(function (c) { c.ids.forEach(function (id) { ehClassica[id] = true; }); });
 
   var estado = { tela: 'inicio', sessao: null, resultado: null, filtro: 'erradas', aba: 'R', busca: '', confirmar: false };
   var relogio = null, avisados = {};
@@ -72,32 +75,56 @@
   function sortearProva() {
     var vistas = ler(CHAVE.vistas, []), recentes = {};
     vistas.forEach(function (id) { recentes[id] = true; });
-    var usadas = {}, placasUsadas = {}, escolhidas = [];
+    var usadas = {}, placasUsadas = {}, escolhidas = [], restam = { 1: COTAS[1], 2: COTAS[2], 3: COTAS[3], 4: COTAS[4] }, placas = 0;
 
     function pode(q) {
+      if (restam[q.m] <= 0) return false;
       var chave = normalizar(q.t);
       if (usadas[chave]) return false;
       if (q.p && placasUsadas[q.p]) return false;
+      // Guarda vagas do módulo 1 para o mínimo de placas.
+      if (q.m === 1 && !temFigura(q) && restam[1] <= MIN_PLACAS - placas) return false;
       return true;
     }
     function usar(q) {
       usadas[normalizar(q.t)] = true;
       if (q.p) placasUsadas[q.p] = true;
+      if (temFigura(q) && q.m === 1) placas++;
+      restam[q.m]--;
       escolhidas.push(q);
     }
-    function pegar(lista, qtd) {
+    // As clássicas ignoram as questões já vistas: é isso que as faz voltar.
+    function pegarClassica(tema) {
+      var q = embaralhar(tema.ids.map(function (id) { return porId[id]; })).filter(pode)[0];
+      if (q) usar(q);
+      return !!q;
+    }
+    function pegarClassicas() {
+      var niveis = embaralhar(CLASSICAS.filter(function (c) { return c.nivel; }));
+      var sorteados = niveis.slice(0, MIN_NIVEIS);
+      var demais = embaralhar(niveis.slice(MIN_NIVEIS).concat(CLASSICAS.filter(function (c) { return !c.nivel; })));
+      var qtd = 0;
+      sorteados.concat(demais).forEach(function (tema) {
+        if (qtd < COTA_CLASSICAS && pegarClassica(tema)) qtd++;
+      });
+    }
+    function pegar(lista) {
       var novas = embaralhar(lista.filter(function (q) { return !recentes[q.i]; }));
       var repetidas = embaralhar(lista.filter(function (q) { return recentes[q.i]; }));
       novas.concat(repetidas).forEach(function (q) {
-        if (qtd > 0 && pode(q)) { usar(q); qtd--; }
+        if (pode(q)) usar(q);
       });
     }
 
-    var modulo1 = BANCO.filter(function (q) { return q.m === 1; });
-    pegar(modulo1.filter(temFigura), MIN_PLACAS);
-    pegar(modulo1.filter(function (q) { return escolhidas.indexOf(q) < 0; }), COTAS[1] - MIN_PLACAS);
-    [2, 3, 4].forEach(function (m) {
-      pegar(BANCO.filter(function (q) { return q.m === m; }), COTAS[m]);
+    pegarClassicas();
+    var outras = BANCO.filter(function (q) { return !ehClassica[q.i]; });
+    embaralhar(outras.filter(function (q) { return q.m === 1 && temFigura(q) && !recentes[q.i]; })).concat(
+      embaralhar(outras.filter(function (q) { return q.m === 1 && temFigura(q) && recentes[q.i]; }))
+    ).forEach(function (q) {
+      if (placas < MIN_PLACAS && pode(q)) usar(q);
+    });
+    [1, 2, 3, 4].forEach(function (m) {
+      pegar(outras.filter(function (q) { return q.m === m; }));
     });
 
     gravar(CHAVE.vistas, escolhidas.map(function (q) { return q.i; }).concat(vistas).slice(0, 300));
@@ -255,6 +282,10 @@
       }).join('') + '</div></nav>';
   }
 
+  function idsNiveis() {
+    return CLASSICAS.filter(function (c) { return c.nivel; }).reduce(function (ids, c) { return ids.concat(c.ids); }, []);
+  }
+
   function telaInicio() {
     var ativa = provaAtiva();
     var hist = ler(CHAVE.hist, []);
@@ -267,6 +298,8 @@
       return '<li><button data-treino="' + m + '">' + esc(MODULOS[m]) + '<small>' + contagem[m] + '</small></button></li>';
     }).join('');
     linhas = '<li><button data-treino="placas">Só placas e sinalização<small>' + comFigura + '</small></button></li>' + linhas;
+    linhas = '<li><button data-treino="classicas">Clássicas que mais se repetem<small>' + Object.keys(ehClassica).length + '</small></button></li>' +
+      '<li><button data-treino="niveis">Níveis de infração e pontos<small>' + idsNiveis().length + '</small></button></li>' + linhas;
     if (erradas.length) {
       linhas = '<li><button data-treino="erradas">Questões que você errou<small>' + erradas.length + '</small></button></li>' + linhas;
     }
@@ -287,7 +320,7 @@
     return cabecalho('inicio') + '<main class="miolo">' +
       '<section class="abertura"><div class="abertura-texto">' +
       '<h1>Treine para a prova teórica do <span class="sem-quebra">Detran-MG</span></h1>' +
-      '<p>Questões reais do Banco Nacional de Questões da Senatran, de onde saem as provas de todos os Detrans. Cada prova sorteia 30 entre ' + BANCO.length.toLocaleString('pt-BR') + '.</p>' +
+      '<p>Questões reais do Banco Nacional de Questões da Senatran, de onde saem as provas de todos os Detrans, mais perguntas extras sobre níveis de infração. Cada prova traz ' + COTA_CLASSICAS + ' clássicas, que voltam sempre, sendo ' + MIN_NIVEIS + ' de níveis de infração, e ' + (TOTAL - COTA_CLASSICAS) + ' sorteadas entre as demais.</p>' +
       chamada +
       '</div><div class="abertura-bandeira"><img src="simbolos/bandeira.svg" alt="Bandeira de Minas Gerais, com o triângulo vermelho e o lema Libertas quae sera tamen"></div></section>' +
       '<section class="regras" aria-label="Como é a prova">' +
@@ -307,7 +340,7 @@
   function rodape() {
     return '<footer class="rodape sobre-escuro"><div class="miolo"><img class="selo" src="simbolos/brasao.png" alt=""><div>' +
       '<p><b>Simulado independente, feito para estudo.</b> Não é um serviço do Detran-MG, da Senatran nem do Governo de Minas Gerais, e o resultado não vale para o processo da CNH.</p>' +
-      '<p>Regras conforme a Resolução Contran nº 1.020/2025, arts. 33 e 34: 30 questões, no mínimo uma hora de prova e 20 acertos para aprovação. Questões do Banco Nacional de Questões, versão 1.0 (Senatran). Origem das figuras e dos símbolos em CREDITOS.txt.</p>' +
+      '<p>Regras conforme a Resolução Contran nº 1.020/2025, arts. 33 e 34: 30 questões, no mínimo uma hora de prova e 20 acertos para aprovação. Questões do Banco Nacional de Questões, versão 1.0 (Senatran), e extras sobre infrações escritas a partir do CTB. A Senatran não divulga quais questões caem mais: as clássicas são uma seleção de temas recorrentes, não uma estatística oficial. Origem das figuras e dos símbolos em CREDITOS.txt.</p>' +
       '<p><button data-acao="limpar">Apagar meu histórico e minhas questões erradas</button></p></div></div></footer>';
   }
 
@@ -525,8 +558,11 @@
       var lista;
       if (d.treino === 'placas') lista = BANCO.filter(temFigura);
       else if (d.treino === 'erradas') lista = ler(CHAVE.erradas, []).map(function (id) { return porId[id]; }).filter(Boolean);
+      else if (d.treino === 'niveis') lista = idsNiveis().map(function (id) { return porId[id]; });
+      // Uma questão de cada tema, para o treino não repetir o mesmo assunto.
+      else if (d.treino === 'classicas') lista = CLASSICAS.map(function (c) { return porId[embaralhar(c.ids)[0]]; });
       else lista = BANCO.filter(function (q) { return q.m === +d.treino; });
-      var titulo = d.treino === 'placas' ? 'Só placas e sinalização' : d.treino === 'erradas' ? 'Questões que você errou' : MODULOS[d.treino];
+      var titulo = d.treino === 'placas' ? 'Só placas e sinalização' : d.treino === 'erradas' ? 'Questões que você errou' : d.treino === 'niveis' ? 'Níveis de infração e pontos' : d.treino === 'classicas' ? 'Clássicas que mais se repetem' : MODULOS[d.treino];
       return comecarTreino(titulo, lista);
     }
     var s = estado.sessao;

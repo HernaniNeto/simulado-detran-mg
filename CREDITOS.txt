@@ -7,6 +7,12 @@ Questões
   1.500 questões com gabarito e comentário oficiais. Foram corrigidos apenas
   erros de digitação evidentes.
 
+Perguntas extras sobre níveis de infração e seleção de clássicas
+  dados/extras.js. As extras foram escritas para este simulado a partir do Código
+  de Trânsito Brasileiro (Lei 9.503/1997) e não fazem parte do banco oficial.
+  A Senatran não divulga a frequência das questões. As clássicas são uma seleção
+  de temas recorrentes em listas de estudo, não uma estatística oficial.
+
 Figuras das placas
   Advertência (A-*): Manual Brasileiro de Sinalização de Trânsito, Volume II.
   Pictogramas de indicação (SAU, TAR, THC, TNA, DEF): Manual, Volume III,
