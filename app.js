@@ -9,7 +9,10 @@
   // As 12 clássicas incluem 5 de níveis de infração, uma de cada grupo.
   var COTA_CLASSICAS = 12, MIN_NIVEIS = 5;
   var LETRAS = ['A', 'B', 'C', 'D'];
-  var CHAVE = { prova: 'detran.prova', hist: 'detran.historico', erradas: 'detran.erradas', vistas: 'detran.vistas', letras: 'detran.letras', contraste: 'detran.contraste' };
+  var MAX_REGISTROS = 1000;
+  // Pausa maior que esta entre duas ações não conta como tempo de treino.
+  var PAUSA_MAX = 5 * 60000;
+  var CHAVE = { prova: 'detran.prova', hist: 'detran.historico', treinos: 'detran.treinos', erradas: 'detran.erradas', vistas: 'detran.vistas', letras: 'detran.letras', contraste: 'detran.contraste' };
 
   var app = document.getElementById('app');
   var BANCO = window.BANCO, GUIA = window.GUIA, MODULOS = window.MODULOS, CLASSICAS = window.CLASSICAS;
@@ -153,9 +156,31 @@
       tipo: 'treino',
       titulo: titulo,
       itens: embaralhar(questoes).slice(0, 20).map(criarItem),
-      atual: 0
+      atual: 0,
+      inicio: Date.now(),
+      toque: Date.now(),
+      tempo: 0
     };
     irPara('prova');
+  }
+  // Grava a cada ação, porque no celular o app pode ser fechado sem "Sair do treino".
+  function registrarTreino() {
+    var s = estado.sessao, agora = Date.now();
+    s.tempo += Math.min(agora - s.toque, PAUSA_MAX);
+    s.toque = agora;
+    var respondidas = s.itens.filter(function (it) { return it.resp !== null; });
+    if (!respondidas.length) return;
+    var registro = {
+      quando: s.inicio,
+      titulo: s.titulo,
+      respondidas: respondidas.length,
+      acertos: respondidas.filter(function (it) { return it.resp === it.certa; }).length,
+      gasto: s.tempo
+    };
+    var treinos = ler(CHAVE.treinos, []);
+    if (treinos[0] && treinos[0].quando === s.inicio) treinos[0] = registro;
+    else treinos.unshift(registro);
+    gravar(CHAVE.treinos, treinos.slice(0, MAX_REGISTROS));
   }
 
   function irPara(tela) {
@@ -217,7 +242,7 @@
     };
     var hist = ler(CHAVE.hist, []);
     hist.unshift({ quando: Date.now(), acertos: acertos, gasto: estado.resultado.gasto });
-    gravar(CHAVE.hist, hist.slice(0, 20));
+    gravar(CHAVE.hist, hist.slice(0, MAX_REGISTROS));
     registrarErradas(s.itens);
     apagar(CHAVE.prova);
     estado.sessao = null;
@@ -272,7 +297,7 @@
 
   function cabecalho(ativo) {
     var ativa = provaAtiva();
-    var itens = [['inicio', 'Início'], [ativa ? 'continuar' : 'comecar', ativa ? 'Continuar a prova' : 'Fazer a prova'], ['treino', 'Treinar'], ['guia', 'Placas e sinalização'], ['provas', 'Minhas provas']];
+    var itens = [['inicio', 'Início'], [ativa ? 'continuar' : 'comecar', ativa ? 'Continuar a prova' : 'Fazer a prova'], ['treino', 'Treinar'], ['guia', 'Placas e sinalização'], ['desempenho', 'Meu desempenho']];
     return '<header class="cabecalho"><div class="miolo">' +
       '<img class="bandeira" src="simbolos/bandeira.svg" alt="Bandeira de Minas Gerais">' +
       '<img class="brasao" src="simbolos/brasao.png" alt="Brasão de Minas Gerais">' +
@@ -334,7 +359,8 @@
       '<div class="coluna"><div class="coluna-topo">' + icone('placa') + '<h3>Placas e sinalização</h3><p>Placas, marcas na via, semáforos e gestos do agente.</p></div>' +
       '<div class="tira-placas"><img src="placas/R-1.svg" alt="Placa Parada obrigatória"><img src="placas/R-19-60.svg" alt="Placa Velocidade máxima de 60 km/h"><img src="placas/A-14.png" alt="Placa Semáforo à frente"><img src="placas/A-32b.png" alt="Placa Passagem sinalizada de pedestres"><img src="placas/SAU-10.png" alt="Placa Pronto-socorro"></div>' +
       '<div class="centro"><button class="pilula" data-acao="guia">Estudar placas</button></div></div>' +
-      '<div class="coluna" id="provas"><div class="coluna-topo">' + icone('lista') + '<h3>Minhas provas</h3><p>Seu histórico fica salvo neste navegador.</p></div>' + tabela + '</div>' +
+      '<div class="coluna" id="provas"><div class="coluna-topo">' + icone('lista') + '<h3>Minhas provas</h3><p>Seu histórico fica salvo neste navegador.</p></div>' + tabela +
+      '<div class="centro"><button class="pilula" data-acao="desempenho">Ver desempenho por dia</button></div></div>' +
       '</div></section></main>' + rodape();
   }
 
@@ -342,7 +368,7 @@
     return '<footer class="rodape sobre-escuro"><div class="miolo"><img class="selo" src="simbolos/brasao.png" alt=""><div>' +
       '<p><b>Simulado independente, feito para estudo.</b> Não é um serviço do Detran-MG, da Senatran nem do Governo de Minas Gerais, e o resultado não vale para o processo da CNH.</p>' +
       '<p>Regras conforme a Resolução Contran nº 1.020/2025, arts. 33 e 34: 30 questões, no mínimo uma hora de prova e 20 acertos para aprovação. Questões do Banco Nacional de Questões, versão 1.0 (Senatran), e extras sobre infrações escritas a partir do CTB. A Senatran não divulga quais questões caem mais: as clássicas são uma seleção de temas recorrentes, não uma estatística oficial. Origem das figuras e dos símbolos em CREDITOS.txt.</p>' +
-      '<p><button data-acao="limpar">Apagar meu histórico e minhas questões erradas</button></p></div></div></footer>';
+      '<p><button data-acao="limpar">Apagar meu histórico, meus treinos e minhas questões erradas</button></p></div></div></footer>';
   }
 
   function telaProva() {
@@ -409,8 +435,85 @@
       '</div></main>' + janela;
   }
 
-  function porcentagem(acertos) {
-    return (acertos / TOTAL * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
+  function porcentagem(acertos, total) {
+    return (acertos / (total || TOTAL) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
+  }
+
+  /* Desempenho por dia */
+  function duracao(ms) {
+    if (ms > 0 && ms < 60000) return 'menos de 1 min';
+    var minutos = Math.round(ms / 60000);
+    if (minutos < 60) return minutos + ' min';
+    return Math.floor(minutos / 60) + 'h' + (minutos % 60 ? ' ' + (minutos % 60) + ' min' : '');
+  }
+  function dataCurta(t) { return new Date(t).toLocaleDateString('pt-BR'); }
+  function nomeDoDia(t) {
+    var ontem = new Date();
+    ontem.setDate(ontem.getDate() - 1);
+    if (dataCurta(t) === dataCurta(Date.now())) return 'Hoje, ' + dataCurta(t);
+    if (dataCurta(t) === dataCurta(ontem)) return 'Ontem, ' + dataCurta(t);
+    return new Date(t).toLocaleDateString('pt-BR', { weekday: 'long' }) + ', ' + dataCurta(t);
+  }
+  function atividades() {
+    var provas = ler(CHAVE.hist, []).map(function (h) {
+      return { prova: true, quando: h.quando, acertos: h.acertos, total: TOTAL, gasto: h.gasto };
+    });
+    var treinos = ler(CHAVE.treinos, []).map(function (t) {
+      return { titulo: t.titulo, quando: t.quando, acertos: t.acertos, total: t.respondidas, gasto: t.gasto };
+    });
+    return provas.concat(treinos).sort(function (a, b) { return b.quando - a.quando; });
+  }
+  function resumirDia(lista) {
+    var provas = lista.filter(function (a) { return a.prova; });
+    var treinos = lista.filter(function (a) { return !a.prova; });
+    function somar(itens, campo) { return itens.reduce(function (n, a) { return n + a[campo]; }, 0); }
+    return {
+      provas: provas.length,
+      treinos: treinos.length,
+      aprovadas: provas.filter(function (a) { return a.acertos >= MINIMO; }).length,
+      acertosProvas: somar(provas, 'acertos'),
+      tempoProvas: somar(provas, 'gasto'),
+      tempoTreinos: somar(treinos, 'gasto')
+    };
+  }
+  function linhaAtividade(a) {
+    var hora = new Date(a.quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    var detalhe = a.prova
+      ? '<span class="' + (a.acertos >= MINIMO ? 'passou' : 'nao-passou') + '">' + (a.acertos >= MINIMO ? 'Aprovado' : 'Reprovado') + '</span> · ' + duracao(a.gasto)
+      : plural(a.total, 'questão respondida', 'questões respondidas') + ' · ' + duracao(a.gasto);
+    return '<li class="atividade"><time>' + hora + '</time><div><b>' + (a.prova ? 'Prova' : 'Treino: ' + esc(a.titulo)) + '</b><span>' + detalhe + '</span></div>' +
+      '<div class="atividade-nota"><b>' + a.acertos + '/' + a.total + '</b><span>' + porcentagem(a.acertos, a.total) + '</span></div></li>';
+  }
+  function telaDesempenho() {
+    var dias = [];
+    atividades().forEach(function (a) {
+      var ultimo = dias[dias.length - 1];
+      if (ultimo && dataCurta(ultimo[0].quando) === dataCurta(a.quando)) ultimo.push(a);
+      else dias.push([a]);
+    });
+    var hoje = resumirDia(dias.length && dataCurta(dias[0][0].quando) === dataCurta(Date.now()) ? dias[0] : []);
+    var numeros = [
+      [hoje.provas, hoje.provas === 1 ? 'prova entregue' : 'provas entregues'],
+      [hoje.treinos, hoje.treinos === 1 ? 'treino' : 'treinos'],
+      [duracao(hoje.tempoProvas), 'em provas'],
+      [duracao(hoje.tempoTreinos), 'treinando']
+    ].map(function (n) {
+      return '<div class="numero-dia"><b>' + n[0] + '</b><span>' + n[1] + '</span></div>';
+    }).join('');
+
+    var lista = dias.map(function (dia) {
+      var r = resumirDia(dia), partes = [];
+      if (r.provas) partes.push(plural(r.provas, 'prova', 'provas') + ', ' + r.aprovadas + ' ' + (r.aprovadas === 1 ? 'aprovada' : 'aprovadas') + ', média de ' + porcentagem(r.acertosProvas, r.provas * TOTAL));
+      if (r.treinos) partes.push(plural(r.treinos, 'treino', 'treinos'));
+      partes.push(duracao(r.tempoProvas + r.tempoTreinos) + ' no total');
+      return '<section class="painel-branco dia"><h2>' + esc(nomeDoDia(dia[0].quando)) + '</h2><p class="dia-resumo">' + esc(partes.join(' · ')) + '</p>' +
+        '<ul class="atividades">' + dia.map(linhaAtividade).join('') + '</ul></section>';
+    }).join('');
+    if (!lista) lista = '<section class="painel-branco"><p class="vazio">Faça uma prova ou um treino e o registro aparece aqui, com a data, a hora e o tempo.</p></section>';
+
+    return cabecalho('desempenho') + '<main class="miolo"><section class="topo-guia"><h1>Meu desempenho</h1></section>' +
+      '<section class="painel-branco"><h2>Hoje</h2><div class="numeros-dia">' + numeros + '</div></section>' + lista +
+      '<p class="nota-desempenho">Os registros ficam salvos neste aparelho e não passam para outros. A prova entra na lista quando é entregue. No treino, pausas de mais de 5 minutos não contam como tempo.</p></main>' + rodape();
   }
 
   function telaResultado() {
@@ -514,7 +617,7 @@
   /* Desenho */
   function desenhar() {
     var t = estado.tela;
-    app.innerHTML = faixa() + (t === 'prova' ? telaProva() : t === 'resultado' ? telaResultado() : t === 'guia' ? telaGuia() : telaInicio());
+    app.innerHTML = faixa() + (t === 'prova' ? telaProva() : t === 'resultado' ? telaResultado() : t === 'guia' ? telaGuia() : t === 'desempenho' ? telaDesempenho() : telaInicio());
     if (t === 'prova' && estado.sessao.tipo === 'prova') iniciarRelogio();
     if (estado.confirmar) {
       var b = app.querySelector('.janela [data-acao="voltar-prova"]');
@@ -526,6 +629,7 @@
     if (i < 0 || i >= s.itens.length) return;
     s.atual = i;
     salvarProva();
+    if (s.tipo === 'treino') registrarTreino();
     desenhar();
     window.scrollTo(0, 0);
     var traco = app.querySelector('[data-ir="' + i + '"]');
@@ -537,6 +641,7 @@
       if (it.resp !== null) return;
       it.resp = i;
       registrarErradas([it]);
+      registrarTreino();
     } else {
       it.resp = it.resp === i ? null : i;
       salvarProva();
@@ -579,10 +684,10 @@
         desenhar();
         break;
       case 'treino':
-      case 'provas':
         irPara('inicio');
         document.getElementById(d.acao).scrollIntoView();
         break;
+      case 'desempenho': irPara('desempenho'); break;
       case 'instalar':
         if (pedidoInstalar) pedidoInstalar.prompt();
         break;
@@ -604,10 +709,10 @@
       case 'pedir-entrega': estado.confirmar = true; desenhar(); break;
       case 'voltar-prova': estado.confirmar = false; desenhar(); break;
       case 'entregar': entregar(false); break;
-      case 'sair-treino': estado.sessao = null; irPara('inicio'); break;
+      case 'sair-treino': registrarTreino(); estado.sessao = null; irPara('inicio'); break;
       case 'limpar':
-        if (window.confirm('Apagar seu histórico de provas e a lista de questões erradas?')) {
-          apagar(CHAVE.hist); apagar(CHAVE.erradas); apagar(CHAVE.vistas);
+        if (window.confirm('Apagar seu histórico de provas e treinos e a lista de questões erradas?')) {
+          apagar(CHAVE.hist); apagar(CHAVE.treinos); apagar(CHAVE.erradas); apagar(CHAVE.vistas);
           desenhar();
           avisar('Histórico e questões erradas apagados.');
         }
